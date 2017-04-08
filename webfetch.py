@@ -43,15 +43,23 @@ import urllib2                         # read web pages
 """
 Brief: Extract href from a html page.
 Input: An html page.
+Input: pattern (optional)
 Return: Href list.
 """
-def extract_href(htmlpage) :
+def extract_href(htmlpage, pattern = None) :
     assert os.path.isfile(htmlpage)
     f = open(htmlpage)
     content = f.read()
-    pattern = '[Hh][Rr][Ee][Ff][\s]*=[\s]*[\"\']*([^\"\'\s>]+)[\"\'\s>]' # note the 'group' in the pattern
-    match = re.findall(pattern, content)
-    return match
+    href_pattern = '[Hh][Rr][Ee][Ff][\s]*=[\s]*[\"\']*([^\"\'\s>]+)[\"\'\s>]' # note the 'group' in the pattern
+    if pattern == None:
+        ret = re.findall(href_pattern, content)
+    else:
+        ret = []
+        match = re.findall(href_pattern, content)
+        for m in match:
+            if re.match(pattern, m):
+                ret.append(m)
+    return ret 
 
 """
 Brief: Extract src reference from a html page.
@@ -213,18 +221,19 @@ Download the hyper reference(href) within a webpage.
 Input :
     1. htmlpage (string), local path to the web page.
     2. url (string), uniform resource locator.
-    3. inner_only (boolean), wether only to download reference with
+    3. pattern (string), selected pattern in href
+    4. inner_only (boolean), wether only to download reference with
        the same netloc as the given 'url'.
-    4. convert_links (boolean), wether convert links in 'htmlpage'.
+    5. convert_links (boolean), wether convert links in 'htmlpage'.
 Output :
     Qualified reference will be download.
 Invariant:
     If 'convert_links' is true, then links within the html page
     will be converted to local relative path.
 """
-def download_href(htmlpage, url, inner_only = True, convert_links = True) :
+def download_href(htmlpage, url, pattern=None, inner_only = True, convert_links = True) :
     assert os.path.isfile(htmlpage)
-    href = extract_href(htmlpage)
+    href = extract_href(htmlpage, pattern)
     refset = set([])
     for ref in href :
 	if ref.startswith('#') : # fragment within the htmlpage
@@ -277,3 +286,9 @@ def webfetch(url, depth=0, local=True) :
                 webfetch(url, depth - 1, local)
     return page
 
+def example_1():
+    # In this example, we download a page, as well as the
+    # href therein.
+    url='https://git-scm.com/book/en/v2/'
+    page = download_page(url=url)
+    reflist = download_href(page, url, pattern='/book/en/v2')
