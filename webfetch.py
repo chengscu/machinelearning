@@ -192,6 +192,7 @@ Input :
     4. convert_links (boolean), wether convert links in 'htmlpage'.
 Output :
     Qualified reference will be download.
+    The url of downloaded hsrc
 Return :
     List of url of downloaded pages.
 Invariant:
@@ -227,6 +228,7 @@ Input :
     5. convert_links (boolean), wether convert links in 'htmlpage'.
 Output :
     Qualified reference will be download.
+    The url of downloaded href
 Invariant:
     If 'convert_links' is true, then links within the html page
     will be converted to local relative path.
@@ -283,7 +285,7 @@ def webfetch(url, depth=0, local=True) :
         reflist = download_href(page, url, local)
         for ref in reflist :
             if ref.endswith('/') or ref.endswith('html') :
-                webfetch(url, depth - 1, local)
+                webfetch(ref, depth - 1, local)
     return page
 
 def example_1():
