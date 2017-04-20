@@ -87,24 +87,27 @@ Note: Local path is 'cwd' + 'netloc' + 'path'.
 """
 def download_page(url, maxtry = 3) :
     if len(urlparse(url).netloc) == 0 or len(urlparse(url).path) == 0 :
-        raise StandardError, 'Invalid url: %s'%(url)
+        printf('Skip invalid url: %s'%(url))
+        return None
 
     path = urlparse(url).netloc +  urlparse(url).path
     if path.endswith('/') :
-	path = path + 'index.html'
+        path = path + 'index.html'
     path = os.path.normpath(path) # for cross platform
 
     # we must guarantee that the path do not go beyond current directory
     assert os.path.relpath(path).find('..') == -1
 
     if os.path.isfile(path) :
-	return path
+        return path 
+    if os.path.isdir(path) :
+        return None 
     if maxtry <= 0 :
         return None
 
     try :
         request = urllib2.Request(url, headers={'User-Agent':"Magic Browser"})
-	webpage = urllib2.urlopen(request)  # return a file like object
+        webpage = urllib2.urlopen(request)  # return a file like object
     except :
         maxtry = maxtry - 1
         if maxtry <= 0 :
@@ -113,16 +116,18 @@ def download_page(url, maxtry = 3) :
         else :
             return download_page(url, maxtry)
 
-    web_content = webpage.read()
     directory = os.path.dirname(path)
+    if os.path.isfile(directory): # TODO
+        return None
     if not os.path.isdir(directory) :
-	os.makedirs(directory)
+        os.makedirs(directory)
     suffix = path.split('.')
     suffix = suffix[len(suffix) - 1]
     if suffix in ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'png', 'jpeg']:
         f = open(path, 'wb')
     else :
         f = open(path, 'w')
+    web_content = webpage.read()
     f.write(web_content)
     f.close()
     print '\'' + path + '\' generated.'
@@ -143,9 +148,9 @@ def replace_reference_base(matchobj) :
     assert(__url != None)
     ref = urlparse(__url).netloc + matchobj.group(2)
     rel = os.path.relpath(ref, \
-	    os.path.dirname(urlparse(__url).netloc + urlparse(__url).path))
+            os.path.dirname(urlparse(__url).netloc + urlparse(__url).path))
     #if matchobj.group(2).endswith('/') :
-	#rel = rel + '/index.html'
+        #rel = rel + '/index.html'
     return matchobj.group(1) + '\"' + rel + '\"'
 
 def convert_src_links(htmlpage, url) :
@@ -168,6 +173,7 @@ def convert_src_links(htmlpage, url) :
 def convert_href_links(htmlpage, url) :
     global __url
     assert os.path.isfile(htmlpage)
+    print('converting ' + htmlpage)
     fin = open(htmlpage, 'r')
     text = fin.read()
     fin.close()
@@ -204,13 +210,13 @@ def download_src(htmlpage, url, inner_only = True, convert_links = True) :
     sources = extract_src(htmlpage)
     srcset = set([])
     for src in sources :
-	src = urljoin(url, src)
+        src = urljoin(url, src)
         if inner_only and (urlparse(src).netloc != urlparse(url).netloc) :
-	    continue
-	srcset.add(src)
+            continue
+        srcset.add(src)
     srcpages = []
     for src in srcset :
-	path = download_page(src)
+        path = download_page(src)
         if path != None :
             srcpages.append(src)
     if(convert_links) :
@@ -238,18 +244,18 @@ def download_href(htmlpage, url, pattern=None, inner_only = True, convert_links 
     href = extract_href(htmlpage, pattern)
     refset = set([])
     for ref in href :
-	if ref.startswith('#') : # fragment within the htmlpage
-	    continue
-	ref = urljoin(url, ref)
+        if ref.startswith('#') : # fragment within the htmlpage
+            continue
+        ref = urljoin(url, ref)
         if inner_only and (urlparse(ref).netloc != urlparse(url).netloc) :
-	    continue
+            continue
         # remove the url fragment
-	ref = ref.split('#') 
-	ref = ref[0]
-	refset.add(ref)
+        ref = ref.split('#') 
+        ref = ref[0]
+        refset.add(ref)
     reflist = []
     for ref in refset :
-	path = download_page(ref)
+        path = download_page(ref)
         if path != None :
             reflist.append(ref)
     if(convert_links) :
@@ -282,15 +288,11 @@ def webfetch(url, depth=0, local=True) :
     page = download_page(url)
     if page != None and depth > 0 :
         srclist = download_src(page, url, True)
-        reflist = download_href(page, url, local)
+        reflist = download_href(page, url, inner_only=local)
         for ref in reflist :
             if ref.endswith('/') or ref.endswith('html') :
                 webfetch(ref, depth - 1, local)
     return page
 
-def example_1():
-    # In this example, we download a page, as well as the
-    # href therein.
-    url='https://git-scm.com/book/en/v2/'
-    page = download_page(url=url)
-    reflist = download_href(page, url, pattern='/book/en/v2')
+url="https://www.tensorflow.org/extend/architecture"
+webfetch(url=url,depth=1)
