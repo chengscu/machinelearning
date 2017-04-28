@@ -74,20 +74,20 @@ def extract_src(htmlpage) :
     match = re.findall(pattern, content)
     return match
 
-"""
-Brief: Download a web page or web file.
-Input: 
-    1.  Url of the web page/file.
-    2.  Max try.
-Return: 
-    Local path to the page/file or None if fail.
-Note: Local path is 'cwd' + 'netloc' + 'path'.
-      If the url points to a directory instead of
-      file, then the web page will be stored at 'index.html'.
-"""
 def download_page(url, maxtry = 3) :
+    """ Download a web page or web file.
+    Inputs: 
+        1.  Url of the web page/file.
+        2.  Max try.
+    Returns: 
+        Local path to the page/file or None if fail.
+        The path is a relative path to cwd.
+    Note: Local path is 'cwd' + 'netloc' + 'path'.
+          If the url points to a directory instead of
+          file, then the web page will be stored at 'index.html'.
+    """
     if len(urlparse(url).netloc) == 0 or len(urlparse(url).path) == 0 :
-        printf('Skip invalid url: %s'%(url))
+        print('Skip invalid url: %s'%(url))
         return None
 
     path = urlparse(url).netloc +  urlparse(url).path
@@ -98,9 +98,9 @@ def download_page(url, maxtry = 3) :
     # we must guarantee that the path do not go beyond current directory
     assert os.path.relpath(path).find('..') == -1
 
-    if os.path.isfile(path) :
+    if os.path.isfile(path) : # already downloaded file
         return path 
-    if os.path.isdir(path) :
+    if os.path.isdir(path) : # already downloaded path
         return None 
     if maxtry <= 0 :
         return None
@@ -116,9 +116,8 @@ def download_page(url, maxtry = 3) :
         else :
             return download_page(url, maxtry)
 
+    web_content = webpage.read()
     directory = os.path.dirname(path)
-    if os.path.isfile(directory): # TODO
-        return None
     if not os.path.isdir(directory) :
         os.makedirs(directory)
     suffix = path.split('.')
@@ -127,7 +126,6 @@ def download_page(url, maxtry = 3) :
         f = open(path, 'wb')
     else :
         f = open(path, 'w')
-    web_content = webpage.read()
     f.write(web_content)
     f.close()
     print '\'' + path + '\' generated.'
@@ -173,7 +171,6 @@ def convert_src_links(htmlpage, url) :
 def convert_href_links(htmlpage, url) :
     global __url
     assert os.path.isfile(htmlpage)
-    print('converting ' + htmlpage)
     fin = open(htmlpage, 'r')
     text = fin.read()
     fin.close()
@@ -205,13 +202,13 @@ Invariant:
     If 'convert_links' is true, then links within the html page
     will be converted to local relative path.
 """
-def download_src(htmlpage, url, inner_only = True, convert_links = True) :
+def download_src(htmlpage, url) :
     assert os.path.isfile(htmlpage)
     sources = extract_src(htmlpage)
     srcset = set([])
     for src in sources :
         src = urljoin(url, src)
-        if inner_only and (urlparse(src).netloc != urlparse(url).netloc) :
+        if (urlparse(src).netloc != urlparse(url).netloc) :
             continue
         srcset.add(src)
     srcpages = []
@@ -219,8 +216,7 @@ def download_src(htmlpage, url, inner_only = True, convert_links = True) :
         path = download_page(src)
         if path != None :
             srcpages.append(src)
-    if(convert_links) :
-        convert_src_links(htmlpage, url)
+    convert_src_links(htmlpage, url)
     return srcpages
 
 """
@@ -229,9 +225,6 @@ Input :
     1. htmlpage (string), local path to the web page.
     2. url (string), uniform resource locator.
     3. pattern (string), selected pattern in href
-    4. inner_only (boolean), wether only to download reference with
-       the same netloc as the given 'url'.
-    5. convert_links (boolean), wether convert links in 'htmlpage'.
 Output :
     Qualified reference will be download.
     The url of downloaded href
@@ -239,15 +232,17 @@ Invariant:
     If 'convert_links' is true, then links within the html page
     will be converted to local relative path.
 """
-def download_href(htmlpage, url, pattern=None, inner_only = True, convert_links = True) :
+def download_href(htmlpage, url, pattern=None) :
     assert os.path.isfile(htmlpage)
     href = extract_href(htmlpage, pattern)
     refset = set([])
     for ref in href :
         if ref.startswith('#') : # fragment within the htmlpage
             continue
+        if ref.startswith('..') : 
+            continue
         ref = urljoin(url, ref)
-        if inner_only and (urlparse(ref).netloc != urlparse(url).netloc) :
+        if (urlparse(ref).netloc != urlparse(url).netloc) :
             continue
         # remove the url fragment
         ref = ref.split('#') 
@@ -258,23 +253,8 @@ def download_href(htmlpage, url, pattern=None, inner_only = True, convert_links 
         path = download_page(ref)
         if path != None :
             reflist.append(ref)
-    if(convert_links) :
-        convert_href_links(htmlpage, url)
+    convert_href_links(htmlpage, url)
     return reflist
-
-def url_smart_complement(url) :
-    if url.find('/') == -1 :
-        return 'http://' + url + '/'
-    if url.find('://') == -1 :
-        url = 'http://' + url
-    if len(urlparse(url).path) == 0 :
-        url = url + '/'
-    if not url.endswith('/') :
-        last = url.split('/')
-        last = last[len(last) - 1]
-        if last.find('.') == -1 :
-            url = url + '/'
-    return url
 
 """
 Fetch web pages.
@@ -284,15 +264,16 @@ Note :
     depth == 2: download reference of reference
     depth == 3: ...
 """
-def webfetch(url, depth=0, local=True) :
+def webfetch(url, depth=0) :
     page = download_page(url)
     if page != None and depth > 0 :
-        srclist = download_src(page, url, True)
-        reflist = download_href(page, url, inner_only=local)
+        srclist = download_src(page, url)
+        reflist = download_href(page, url)
         for ref in reflist :
             if ref.endswith('/') or ref.endswith('html') :
-                webfetch(ref, depth - 1, local)
+                webfetch(ref, depth - 1)
     return page
 
-url="https://www.tensorflow.org/extend/architecture"
-webfetch(url=url,depth=1)
+
+url='http://192.168.2.15/'
+webfetch(url=url,depth=2)
